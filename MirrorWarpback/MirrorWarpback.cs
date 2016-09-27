@@ -138,6 +138,12 @@ namespace MirrorWarpback
 
         public void OnGreet(GreetPlayerEventArgs args)
         {
+            if (TShock.Players[args.Who].User == null)
+            {
+                // A player who hasn't logged in or has no account.
+                return;
+            }
+
             int uid = TShock.Players[args.Who].User.ID;
 
             if( ! wbplayers.ContainsKey(uid) )
@@ -155,7 +161,7 @@ namespace MirrorWarpback
 
                 if (haslens)
                 {
-                    TShock.Players[args.Who].SendInfoMessage("Your lens appears to be glowing.");
+                    TShock.Players[args.Who].SendInfoMessage("Your lens is holding an image of another place.");
                 }
             }
         }
@@ -187,11 +193,11 @@ namespace MirrorWarpback
 
                         if (haslens)
                         {
-                            TShock.Players[args.PlayerId].SendInfoMessage("Your lens seems to lock on your current position as you step into the mirror.");
+                            TShock.Players[args.PlayerId].SendInfoMessage("Your lens shimmers and holds an image of your location as you step into the mirror.");
                         }
                         else
                         {
-                            TShock.Players[args.PlayerId].SendInfoMessage("As you step into the mirror you notice a thin trail behind you, but it quickly dissipates.");
+                            TShock.Players[args.PlayerId].SendInfoMessage("As you step into the mirror you notice an odd concave refraction behind you.");
                         }
 
                         if (!wbplayers.ContainsKey(uid))
@@ -207,7 +213,7 @@ namespace MirrorWarpback
                     {
                         if ( wbplayers[uid].Available )
                         {
-                            TShock.Players[args.PlayerId].SendInfoMessage("The lens' glow fades as you step into it.");
+                            TShock.Players[args.PlayerId].SendInfoMessage("The lens' image fades as you step into it.");
                             wbplayers[uid].Teleport(args.PlayerId);
                         }
                         else
