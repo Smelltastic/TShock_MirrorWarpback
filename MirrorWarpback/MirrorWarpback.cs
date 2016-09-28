@@ -224,8 +224,7 @@ namespace MirrorWarpback
                         {
                             SendInfoMessageIfPresent(p, config.msgOnLensSuccess);
 
-                            //if (config.returnItemConsume && Main.ServerSideCharacter)
-                            if (config.returnItemConsume)
+                            if (config.returnItemConsume && Main.ServerSideCharacter)
                             {
                                 if (p.TPlayer.inventory[args.Item].stack > 1)
                                     p.TPlayer.inventory[args.Item].stack -= 1;
@@ -247,12 +246,11 @@ namespace MirrorWarpback
                     TSPlayer p = TShock.Players[args.PlayerId];
                     if( p.HasPermission("mw.gravewarp") )
                     {
-                        if ( p.TPlayer.lastDeathPostion != null)
+                        if ( p.TPlayer.lastDeathTime.Year > 1980)
                         {
-                            SendInfoMessageIfPresent(p, config.msgOnWormholeSuccess + " (X,Y: " + p.TPlayer.lastDeathPostion.X + "," + p.TPlayer.lastDeathPostion.Y + ")");
+                            SendInfoMessageIfPresent(p, config.msgOnWormholeSuccess);
 
-                            //if (config.graveReturnItemConsume && Main.ServerSideCharacter)
-                            if (config.graveReturnItemConsume)
+                            if (config.graveReturnItemConsume && Main.ServerSideCharacter)
                             {
                                 if (p.TPlayer.inventory[args.Item].stack > 1)
                                     p.TPlayer.inventory[args.Item].stack -= 1;
