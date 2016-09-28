@@ -191,7 +191,7 @@ namespace MirrorWarpback
                 int uid = TShock.Players[args.PlayerId].User.ID;
                 Item it = TShock.Players[args.PlayerId].TPlayer.inventory[args.Item];
 
-                if ( it.type == 50 || it.type == 3124 || it.type == 3199 ) // Magic Mirror, Cell Phone, Ice Mirror
+                if ( (it.type == 50 || it.type == 3124 || it.type == 3199) && (config.returnItemType != 0) ) // Magic Mirror, Cell Phone, Ice Mirror
                 {
                     TSPlayer p = TShock.Players[args.PlayerId];
                     if (p.HasPermission("mw.warpback"))
@@ -242,7 +242,7 @@ namespace MirrorWarpback
                         }
                     }
                 }
-                else if( it.type == config.graveReturnItemType && config.graveReturnItemType != 0 )
+                else if ( it.type == config.graveReturnItemType && config.graveReturnItemType != 0 )
                 {
                     TSPlayer p = TShock.Players[args.PlayerId];
                     if( p.HasPermission("mw.gravewarp") )
