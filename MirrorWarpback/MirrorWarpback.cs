@@ -12,11 +12,13 @@ namespace MirrorWarpback
     [ApiVersion(1, 24)]
     public class MirrorWarpback : TerrariaPlugin
     {
+        Config config = Config.Read("mirrorwarpback.json");
+
         public override Version Version
         {
             get
             {
-                return new Version("1.0");
+                return new Version("1.1");
             }
         }
 
@@ -40,7 +42,7 @@ namespace MirrorWarpback
         {
             get
             {
-                return "Lets you use (not consume) a lens item to return to the spot where you last used a magic mirror, ice mirror, or cell phone. Requires mw.warpback permission.";
+                return "Lets you use a lens item (configurable) to return to the spot where you last used a magic mirror, ice mirror, or cell phone. Requires mw.warpback permission.";
             }
         }
 
@@ -96,17 +98,17 @@ namespace MirrorWarpback
                 db.DelUserData(Uid);
             }
 
-            public void Teleport()
+            public void Teleport(byte effect = 1)
             {
-                Teleport(TShock.Users.GetUserID(TShock.Users.GetUserByID(Uid).Name));
+                Teleport(TShock.Users.GetUserID(TShock.Users.GetUserByID(Uid).Name), effect);
             }
 
-            public void Teleport( int who )
+            public void Teleport( int who, byte effect = 1 )
             {
                 if (!Avail)
                     return;
 
-                TShock.Players[who].Teleport(X, Y, 1);
+                TShock.Players[who].Teleport(X, Y, effect );
                 Avail = false;
                 db.DelUserData(Uid);
             }
@@ -136,11 +138,19 @@ namespace MirrorWarpback
             base.Dispose(Disposing);
         }
 
+        private void SendInfoMessageIfPresent( TSPlayer p, string msg )
+        {
+            if( !(p == null) && !(String.IsNullOrEmpty(msg)) )
+            {
+                p.SendInfoMessage(msg);
+            }
+        }
+
         public void OnGreet(GreetPlayerEventArgs args)
         {
             if (TShock.Players[args.Who].User == null)
             {
-                // A player who hasn't logged in or has no account.
+                // Player hasn't logged in or has no account.
                 return;
             }
 
@@ -152,16 +162,19 @@ namespace MirrorWarpback
             }
             
             if( wbplayers[uid].Available ) {
-                bool haslens = false;
-                foreach (NetItem thing in TShock.Players[args.Who].PlayerData.inventory)
+                bool haslens = !config.greetRequiresItem;
+                if (!haslens)
                 {
-                    if (thing.NetId == 38)
-                        haslens = true;
+                    foreach (NetItem thing in TShock.Players[args.Who].PlayerData.inventory)
+                    {
+                        if (thing.NetId == config.returnItemType)
+                            haslens = true;
+                    }
                 }
 
                 if (haslens)
                 {
-                    TShock.Players[args.Who].SendInfoMessage("Your lens is holding an image of another place.");
+                    SendInfoMessageIfPresent(TShock.Players[args.Who], config.msgOnGreet );
                 }
             }
         }
@@ -175,54 +188,89 @@ namespace MirrorWarpback
 
                 Using[args.PlayerId] = true;
 
-                if( TShock.Players[args.PlayerId].HasPermission("mw.warpback") )
+                int uid = TShock.Players[args.PlayerId].User.ID;
+                Item it = TShock.Players[args.PlayerId].TPlayer.inventory[args.Item];
+
+                if ( it.type == 50 || it.type == 3124 || it.type == 3199 ) // Magic Mirror, Cell Phone, Ice Mirror
                 {
-                    int uid = TShock.Players[args.PlayerId].User.ID;
-
-                    Item it = Main.player[args.PlayerId].inventory[args.Item];
-
-                    if (new[] { 50, 3124, 3199 }.Contains(it.type)) // Magic Mirror, Cell Phone, Ice Mirror
+                    TSPlayer p = TShock.Players[args.PlayerId];
+                    if (p.HasPermission("mw.warpback"))
                     {
                         bool haslens = false;
 
-                        foreach (NetItem thing in TShock.Players[args.PlayerId].PlayerData.inventory)
+                        foreach (NetItem thing in p.TPlayer.inventory)
                         {
-                            if (thing.NetId == 38)
+                            if (thing.NetId == config.returnItemType)
                                 haslens = true;
                         }
 
                         if (haslens)
-                        {
-                            TShock.Players[args.PlayerId].SendInfoMessage("Your lens shimmers and holds an image of your location as you step into the mirror.");
-                        }
+                            SendInfoMessageIfPresent(p, config.msgOnMirrorWithLens);
                         else
-                        {
-                            TShock.Players[args.PlayerId].SendInfoMessage("As you step into the mirror you notice an odd concave refraction behind you.");
-                        }
+                            SendInfoMessageIfPresent(p, config.msgOnMirrorNoLens);
 
                         if (!wbplayers.ContainsKey(uid))
-                        {
-                            wbplayers.Add(uid, new WarpbackData(uid, TShock.Players[args.PlayerId].X, TShock.Players[args.PlayerId].Y));
-                        }
+                            wbplayers.Add(uid, new WarpbackData(uid, p.X, p.Y));
                         else
-                        {
-                            wbplayers[uid].Set(TShock.Players[args.PlayerId].X, TShock.Players[args.PlayerId].Y);
-                        }
+                            wbplayers[uid].Set(p.X, p.Y);
                     }
-                    else if (it.type == 38) // Lens
+                }
+                else if (it.type == config.returnItemType && config.returnItemType != 0)
+                {
+                    TSPlayer p = TShock.Players[args.PlayerId];
+                    if (p.HasPermission("mw.warpback"))
                     {
-                        if ( wbplayers[uid].Available )
+                        if (wbplayers[uid].Available)
                         {
-                            TShock.Players[args.PlayerId].SendInfoMessage("The lens' image fades as you step into it.");
-                            wbplayers[uid].Teleport(args.PlayerId);
+                            SendInfoMessageIfPresent(p, config.msgOnLensSuccess);
+
+                            //if (config.returnItemConsume && Main.ServerSideCharacter)
+                            if (config.returnItemConsume)
+                            {
+                                if (p.TPlayer.inventory[args.Item].stack > 1)
+                                    p.TPlayer.inventory[args.Item].stack -= 1;
+                                else
+                                    p.TPlayer.inventory[args.Item].type = 0;
+
+                                NetMessage.SendData((int)PacketTypes.PlayerSlot, number:p.Index, number2:args.Item);
+                            }
+                            wbplayers[uid].Teleport(args.PlayerId, config.returnEffect);
                         }
                         else
                         {
-                            TShock.Players[args.PlayerId].SendInfoMessage("You wave the lens about for a bit but nothing seems to happen.");
+                            SendInfoMessageIfPresent(p, config.msgOnLensFailure);
                         }
                     }
                 }
-            }
+                else if( it.type == config.graveReturnItemType && config.graveReturnItemType != 0 )
+                {
+                    TSPlayer p = TShock.Players[args.PlayerId];
+                    if( p.HasPermission("mw.gravewarp") )
+                    {
+                        if ( p.TPlayer.lastDeathPostion != null)
+                        {
+                            SendInfoMessageIfPresent(p, config.msgOnWormholeSuccess + " (X,Y: " + p.TPlayer.lastDeathPostion.X + "," + p.TPlayer.lastDeathPostion.Y + ")");
+
+                            //if (config.graveReturnItemConsume && Main.ServerSideCharacter)
+                            if (config.graveReturnItemConsume)
+                            {
+                                if (p.TPlayer.inventory[args.Item].stack > 1)
+                                    p.TPlayer.inventory[args.Item].stack -= 1;
+                                else
+                                    p.TPlayer.inventory[args.Item].type = 0;
+
+                                NetMessage.SendData((int)PacketTypes.PlayerSlot, number: p.Index, number2: args.Item);
+                            }
+
+                            p.Teleport(p.TPlayer.lastDeathPostion.X, p.TPlayer.lastDeathPostion.Y, config.graveReturnEffect);
+                        }
+                        else
+                        {
+                            SendInfoMessageIfPresent(TShock.Players[args.PlayerId], config.msgOnWormholeFailure);
+                        }
+                    }
+                }
+            } // fi ((args.Control & 32) == 32)
             else
             {
                 Using[args.PlayerId] = false;
