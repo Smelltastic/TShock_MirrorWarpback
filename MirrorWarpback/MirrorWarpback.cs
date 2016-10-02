@@ -48,11 +48,22 @@ namespace MirrorWarpback
 
         public class WarpbackData
         {
-            private int Uid;
+            private TSPlayer Plr;
             private bool Avail;
-            public float X;
-            public float Y;
-            private DB db = new DB("MirrorWarpback", new String[] { "Avail", "X", "Y" });
+            private float X;
+            private float Y;
+            private PlayerDB.DB db = new PlayerDB.DB("MirrorWarpback", new String[] { "Avail", "X", "Y" });
+
+            public static WarpbackData Get( TSPlayer plr )
+            {
+                WarpbackData ret = plr.GetData<WarpbackData>("warpback");
+                if( ret == null )
+                {
+                    ret = new WarpbackData(plr);
+                    plr.SetData<WarpbackData>("warpback", ret);
+                }
+                return ret;
+            }
 
             public bool Available
             {
@@ -62,25 +73,27 @@ namespace MirrorWarpback
                 }
             }
 
-            public WarpbackData(int uid)
+            public WarpbackData(TSPlayer plr)
             {
-                Uid = uid;
-                Avail = (db.GetUserData(Uid, "Avail") == "1");
-                if( Avail )
+                Plr = plr;
+                if (Plr.UUID != "")
                 {
-                    X = Convert.ToSingle(db.GetUserData(uid, "X"));
-                    Y = Convert.ToSingle(db.GetUserData(uid, "Y"));
+                    Avail = (db.GetUserData(plr, "Avail") == "1");
+                    if (Avail)
+                    {
+                        X = Convert.ToSingle(db.GetUserData(plr, "X"));
+                        Y = Convert.ToSingle(db.GetUserData(plr, "Y"));
+                    }
                 }
                 else
                 {
-                    X = -1;
-                    Y = -1;
+                    TShock.Log.ConsoleError("WARNING: WarbackData initialized before UUID available for " + plr.Name + "!");
                 }
             }
 
-            public WarpbackData(int uid, float x, float y)
+            public WarpbackData(TSPlayer plr, float x, float y)
             {
-                Uid = uid;
+                Plr = plr;
                 Set(x, y);
             }
 
@@ -89,32 +102,30 @@ namespace MirrorWarpback
                 Avail = true;
                 X = x;
                 Y = y;
-                db.SetUserData(Uid, new List<string> { "1", Convert.ToString(X), Convert.ToString(Y) });
+                if( Plr.UUID != "" )
+                    db.SetUserData(Plr, new List<string> { "1", Convert.ToString(X), Convert.ToString(Y) });
             }
 
             public void Clear()
             {
                 Avail = false;
-                db.DelUserData(Uid);
+                if( Plr.UUID != "" )
+                    db.DelUserData(Plr.UUID);
             }
 
             public void Teleport(byte effect = 1)
             {
-                Teleport(TShock.Users.GetUserID(TShock.Users.GetUserByID(Uid).Name), effect);
-            }
-
-            public void Teleport( int who, byte effect = 1 )
-            {
                 if (!Avail)
                     return;
 
-                TShock.Players[who].Teleport(X, Y, effect );
+                Plr.Teleport(X, Y, effect);
                 Avail = false;
-                db.DelUserData(Uid);
+                if( Plr.UUID != "" )
+                    db.DelUserData(Plr.UUID);
             }
         }
 
-        public Dictionary<int, WarpbackData> wbplayers = new Dictionary<int, WarpbackData>();
+        //public Dictionary<int, WarpbackData> wbplayers = new Dictionary<int, WarpbackData>();
         public bool[] Using = new bool[255];
 
         public MirrorWarpback(Main game) : base(game)
@@ -154,14 +165,18 @@ namespace MirrorWarpback
                 return;
             }
 
-            int uid = TShock.Players[args.Who].User.ID;
 
+            //int uid = TShock.Players[args.Who].User.ID;
+            WarpbackData wb = WarpbackData.Get(TShock.Players[args.Who]);
+
+            /*
             if( ! wbplayers.ContainsKey(uid) )
             {
                 wbplayers.Add(uid, new WarpbackData(uid) );
             }
-            
-            if( wbplayers[uid].Available ) {
+            */
+
+            if( wb.Available ) {
                 bool haslens = !config.greetRequiresItem;
                 if (!haslens)
                 {
@@ -188,12 +203,13 @@ namespace MirrorWarpback
 
                 Using[args.PlayerId] = true;
 
-                int uid = TShock.Players[args.PlayerId].User.ID;
+                //int uid = TShock.Players[args.PlayerId].User.ID;
                 Item it = TShock.Players[args.PlayerId].TPlayer.inventory[args.Item];
 
                 if ( (it.type == 50 || it.type == 3124 || it.type == 3199) && (config.returnItemType != 0) ) // Magic Mirror, Cell Phone, Ice Mirror
                 {
                     TSPlayer p = TShock.Players[args.PlayerId];
+                    WarpbackData wb = WarpbackData.Get(TShock.Players[args.PlayerId]);
                     if (p.HasPermission("mw.warpback"))
                     {
                         bool haslens = false;
@@ -209,18 +225,17 @@ namespace MirrorWarpback
                         else
                             SendInfoMessageIfPresent(p, config.msgOnMirrorNoLens);
 
-                        if (!wbplayers.ContainsKey(uid))
-                            wbplayers.Add(uid, new WarpbackData(uid, p.X, p.Y));
-                        else
-                            wbplayers[uid].Set(p.X, p.Y);
+                        wb.Set(p.X, p.Y);
                     }
                 }
                 else if (it.type == config.returnItemType && config.returnItemType != 0)
                 {
                     TSPlayer p = TShock.Players[args.PlayerId];
+                    WarpbackData wb = WarpbackData.Get(TShock.Players[args.PlayerId]);
+
                     if (p.HasPermission("mw.warpback"))
                     {
-                        if (wbplayers[uid].Available)
+                        if (wb.Available)
                         {
                             SendInfoMessageIfPresent(p, config.msgOnLensSuccess);
 
@@ -233,7 +248,7 @@ namespace MirrorWarpback
 
                                 NetMessage.SendData((int)PacketTypes.PlayerSlot, number:p.Index, number2:args.Item);
                             }
-                            wbplayers[uid].Teleport(args.PlayerId, config.returnEffect);
+                            wb.Teleport(config.returnEffect);
                         }
                         else
                         {

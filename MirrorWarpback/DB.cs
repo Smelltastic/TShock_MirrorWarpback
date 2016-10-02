@@ -3,20 +3,23 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.IO;
-using System.Text;
-using System.Threading.Tasks;
+//using System.Text;
+//using System.Threading.Tasks;
 using TShockAPI;
 using TShockAPI.DB;
 using Mono.Data.Sqlite;
 using MySql.Data.MySqlClient;
 
-namespace MirrorWarpback
+namespace PlayerDB
 {
     public class DB
     {
         private IDbConnection db;
         private String table;
         private List<string> fields;
+
+        private string paramlist0;
+        private string paramlist1;
 
         public bool Connected
         {
@@ -28,12 +31,21 @@ namespace MirrorWarpback
 
         public DB()
         {
-
+            TShockAPI.Hooks.AccountHooks.AccountDelete += OnAccountDelete;
         }
 
         public DB( String Table, String[] Fields )
         {
+            TShockAPI.Hooks.AccountHooks.AccountDelete += OnAccountDelete;
             Connect(Table, Fields);
+        }
+
+        void OnAccountDelete(TShockAPI.Hooks.AccountDeleteEventArgs arg)
+        {
+            if (!Connected)
+                return;
+
+            DelUserData(arg.User.UUID);
         }
 
         public void Connect(string Table, String[] Fields)
@@ -41,7 +53,7 @@ namespace MirrorWarpback
             Connect(Table, Fields.ToList());
         }
 
-        public void Connect( string Table, List<string> Fields)
+        public void Connect(string Table, List<string> Fields)
         {
             table = Table;
             fields = Fields;
@@ -68,79 +80,312 @@ namespace MirrorWarpback
             }
 
             SqlTableCreator sqlcreator = new SqlTableCreator(db, db.GetSqlType() == SqlType.Sqlite ? (IQueryBuilder)new SqliteQueryCreator() : new MysqlQueryCreator());
-
             List<SqlColumn> columns = new List<SqlColumn>();
 
-            columns.Add(new SqlColumn("UserID", MySqlDbType.Int32) { Primary = true, Unique = true, Length = 4 });
+            columns.Add(new SqlColumn("UserID", MySqlDbType.String) { Primary = true, Unique = true });
+            int i = 0;
             foreach (string field in fields)
             {
                 columns.Add(new SqlColumn(field, MySqlDbType.Text, 100));
+                paramlist0 += ",@" + i.ToString();
+                paramlist1 += ",@" + (i + 1).ToString();
+                i++;
             }
+            paramlist0 = paramlist0.Substring(1);
+            paramlist1 = paramlist1.Substring(1);
 
             sqlcreator.EnsureTableStructure(new SqlTable(table, columns));
+
+            QueryResult result = db.QueryReader("SELECT * FROM " + table + ";");
+
+            /* No longer read on init, instead read on access - because there's no place to store it without logged-in players
+            string uuid = "";
+
+            while( result.Read() )
+            {
+                uuid = result.Reader.Get<string>("UserID");
+                foreach (string field in fields)
+                {
+                    //data[ new Tuple<string,string>(uuid,field) ] = result.Reader.Get<string>(field);
+                }
+            }
+            */
         }
 
-        public string GetUserData(int userid, string field)
+        private TSPlayer FindPlayer(string uuid)
+        {
+            foreach (TSPlayer p in TShock.Players)
+            {
+                if (p.UUID == uuid)
+                {
+                    return p;
+                }
+            }
+            return null;
+        }
+
+        private Dictionary<string,string> ReadUserData(string uuid)
         {
             if (!Connected)
-                return null;
+                throw new SystemException("Database not connected in ReadUserData()");
 
-            if (!fields.Contains(field))
-                return null;
-
-            QueryResult result = db.QueryReader("SELECT " + field + " FROM " + table + " WHERE UserID=" + userid + ";");
-            
+            Dictionary<string, string> ret = new Dictionary<string, string> { };
+            QueryResult result = db.QueryReader("SELECT * FROM " + table + " WHERE UserID=@0;", uuid);
             if (result.Read())
             {
-                return result.Get<String>(field);
+                foreach (string f in fields)
+                {
+                    ret.Add(f, result.Get<string>(f));
+                }
             }
-            else
-            {
-                return null;
-            }            
+            return ret;
         }
 
-        /* Currently disabled because for some reason it causes a HUGE delay and hangs up the plugin.
-        public void SetUserData(int userid, string field, string data)
+        private string ReadUserData(string uuid, string field, string defaultval = null)
         {
             if (!Connected)
-                return;
+                throw new SystemException("Database not connected in ReadUserData()");
 
+            if (!fields.Contains(field))
+                throw new ArgumentException("Field not in database.", "field");
+
+            QueryResult result = db.QueryReader("SELECT " + field + " FROM " + table + " WHERE UserID=@0;", uuid);
+
+            if (result.Read())
+            {
+                return result.Get<string>(field);
+            }
+            return defaultval;
+        }
+
+        private void WriteUserData(string uuid, List<string> values)
+        {
+            if (!Connected)
+                throw new SystemException("Database not connected in WriteUserData()"); ;
+
+            values.Insert(0, uuid);
+
+            db.Query("DELETE FROM " + table + " WHERE UserID=@0;", uuid);
+            db.Query("INSERT INTO " + table + " VALUES (@0," + paramlist1 + ");", values.ToArray());
+        }
+
+        private void WriteUserData(string uuid, string[] values)
+        {
+            WriteUserData(uuid, values.ToList());
+        }
+
+        private void WriteUserData(string uuid, Dictionary<string,string> data)
+        {
+            List<string> values = new List<string> { };
+            foreach( string field in fields )
+            {
+                if( data.ContainsKey(field) )
+                    values.Add(data[field]);
+                else
+                    values.Add(null);
+            }
+            WriteUserData(uuid, values);
+        }
+
+        private void WriteUserData(string uuid, string field, string value)
+        {
+            Dictionary<string, string> data;
+            data = ReadUserData(uuid);
+            if( data.ContainsKey(field) )
+                data[field] = value;
+            else
+                data.Add(field, value);
+            WriteUserData(uuid, data);
+        }
+
+        private void WriteUserData(TSPlayer p)
+        {
+            List<string> values = new List<string> { };
+
+            foreach (string field in fields)
+            {
+                if (p.GetData<bool>("dbhas" + field))
+                    values.Add(p.GetData<string>(field));
+                else
+                    values.Add("");
+            }
+
+            WriteUserData(p.UUID, values);
+        }
+
+        public string GetUserData(TSPlayer p, string field, string defaultval = null)
+        {
+            if (p == null)
+            {
+                TShock.Log.ConsoleError("DB.GetUserData() called with a null player!");
+                return defaultval;
+            }
+            if( !p.IsLoggedIn )
+            {
+                TShock.Log.ConsoleError("DB.GetUserData() called before player was logged in!");
+                return defaultval;
+            }
+            if( p.UUID == "" )
+            {
+                TShock.Log.ConsoleError("DB.GetUserData() called with a null UID for unknown reasons!");
+                return defaultval;
+            }
+            if (p.GetData<bool>("dbhas" + field))
+                return (string)p.GetData<string>(field);
+            else
+            {
+                string ret = ReadUserData(p.UUID, field, defaultval);
+                if( ret != defaultval )
+                {
+                    WriteUserData(p.UUID, field, ret);
+                }
+                return ret;
+            }
+        }
+
+        public List<string> GetUserData(TSPlayer p) // May return an empty list if data is not found.
+        {
+            List<string> ret = new List<string> { };
+            bool checkeddb = false;
+            foreach (string field in fields)
+            {
+                if (p.GetData<bool>("dbhas" + field))
+                    ret.Add(p.GetData<string>(field));
+                else if (!checkeddb)
+                {
+                    QueryResult result = db.QueryReader("SELECT * FROM " + table + " WHERE UserID=@0;", p.UUID);
+
+                    if (result.Read())
+                    {
+                        foreach (string f in fields)
+                        {
+                            p.SetData<bool>("dbhas" + field, true);
+                            p.SetData<string>(field, result.Get<string>(f));
+                        }
+                        ret.Add( p.GetData<string>(field) );
+                    }
+                    checkeddb = true;
+                }
+            }
+            return ret;
+        }
+
+       public void SetUserData(TSPlayer p, List<string> values)
+        {
+            int i = 0;
+            foreach (string value in values)
+            {
+                p.SetData<bool>("dbhas" + fields[i], true);
+                p.SetData<string>(fields[i], value);
+                i += 1;
+            }
+            WriteUserData(p);
+        }
+
+        public void SetUserData(TSPlayer p, String[] values)
+        {
+            int i = 0;
+            foreach (string value in values)
+            {
+                p.SetData<bool>("dbhas" + fields[i], true);
+                p.SetData<string>(fields[i], value);
+                i += 1;
+            }
+            WriteUserData(p);
+        }
+
+        public void SetUserData(string uuid, List<string> values)
+        {
+            TSPlayer p = FindPlayer(uuid);
+            if( p != null )
+                SetUserData(p, values);
+            else
+                WriteUserData(uuid, values);
+        }
+
+        public void SetUserData(string uuid, String[] values)
+        {
+            TSPlayer p = FindPlayer(uuid);
+            if( p != null )
+                SetUserData(p, values);
+            else
+                WriteUserData(uuid, values);
+        }
+
+        public void SetUserData(TSPlayer p, string field, string value)
+        {
             if (!fields.Contains(field))
                 return;
 
-            TShock.Players[0].SendInfoMessage("Checking presense for user " + userid + ".");
-            QueryResult result = db.QueryReader("SELECT * FROM " + table + " WHERE UserID=@0;", userid);
-            if( ! result.Read() )
+            p.SetData<bool>("dbhas" + field, true);
+            p.SetData<string>(field, value);
+
+            WriteUserData(p);
+        }
+
+        public void SetUserData(string uuid, string field, string value)
+        {
+            foreach (TSPlayer p in TShock.Players)
             {
-                TShock.Players[0].SendInfoMessage("No data found for user " + userid + ", creating.");
-                db.Query("INSERT INTO " + table + " (UserID, " + field + ") VALUES (@0, @1);", userid, "");
+                if (p.UUID == uuid)
+                {
+                    SetUserData(p, field, value);
+                    return;
+                }
             }
 
-            TShock.Players[0].SendInfoMessage("Sending update query.");
-            db.Query("UPDATE " + table + " SET " + field + "='" + data + "' WHERE UserID=" + userid + ";");
-
-            TShock.Players[0].SendInfoMessage("Update query sent.");
-
-            //db.Query("UPDATE " + table + " SET " + field + "=@1 WHERE Key=@0; IF @@ROWCOUNT = 0 INSERT INTO " + table + " (" + field + ") VALUES (@1);", userid, data);
-            //db.Query("INSERT INTO " + table + "(UserId, " + field + ") VALUES (@0, @1);", userid, data);
-        }
-        */
-
-        public void SetUserData(int userid, List<string>fields )
-        {
-            string all = userid + ",'" + String.Join("','", fields) + "'";
-            db.Query("DELETE FROM " + table + " WHERE UserID=@0;", userid);
-            db.Query("INSERT INTO " + table + " VALUES (" + all + ");");
+            WriteUserData(uuid, field, value);
         }
 
-        public void DelUserData(int userid)
+        public void ResetAllUserData(List<string> values)
         {
-            db.Query("DELETE FROM " + table + " WHERE UserID=@0;", userid);
+            string uuid = "";
+            QueryResult allids = db.QueryReader("SELECT UserID FROM " + table + ";");
+            while( allids.Read() )
+            {
+                uuid = allids.Get<string>("UserID");
+                SetUserData(uuid, values);
+            }
+        }
+
+        public void ResetAllUserData(string field, string value)
+        {
+            string uuid = "";
+            QueryResult allids = db.QueryReader("SELECT UserID FROM " + table + ";");
+            while (allids.Read())
+            {
+                uuid = allids.Get<string>("UserID");
+                SetUserData(uuid, field, value);
+            }
+        }
+
+        public void DelUserData(TSPlayer p)
+        {
+            foreach (string field in fields)
+            {
+                p.SetData<bool>("dbhas" + field, false);
+            }
+            db.Query("DELETE FROM " + table + " WHERE UserID=@0;", p.UUID);
+        }
+
+        public void DelUserData(string uuid)
+        {
+            TSPlayer p = FindPlayer(uuid);
+            if( p != null )
+                DelUserData(p);
+            else
+                db.Query("DELETE FROM " + table + " WHERE UserID=@0;", uuid);
         }
 
         private void clearDB()
         {
+            foreach (TSPlayer p in TShock.Players)
+            {
+                foreach (string field in fields)
+                {
+                    p.SetData<bool>("dbhas" + field, false);
+                }
+            }
             db.Query("DELETE FROM " + table);
         }
     }
