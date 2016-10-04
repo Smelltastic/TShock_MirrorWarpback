@@ -9,7 +9,7 @@ using TShockAPI;
 
 namespace MirrorWarpback
 {
-    [ApiVersion(1, 24)]
+    [ApiVersion(1, 25)]
     public class MirrorWarpback : TerrariaPlugin
     {
         Config config = Config.Read("mirrorwarpback.json");
