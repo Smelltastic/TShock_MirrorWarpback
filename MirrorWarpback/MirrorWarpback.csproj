@@ -49,15 +49,15 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Mono.Data.Sqlite">
-      <HintPath>..\..\..\Games\Terraria\tshock_4.3.19_fresh\ServerPlugins\Mono.Data.Sqlite.dll</HintPath>
+      <HintPath>..\..\..\..\..\Games\Terraria\tshock_4.3.19_fresh\ServerPlugins\Mono.Data.Sqlite.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="MySql.Data">
-      <HintPath>..\..\..\Games\Terraria\tshock_4.3.19_fresh\ServerPlugins\MySql.Data.dll</HintPath>
+      <HintPath>..\..\..\..\..\Games\Terraria\tshock_4.3.19_fresh\ServerPlugins\MySql.Data.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\..\Games\Terraria\tshock_4.3.19_fresh\Newtonsoft.Json.dll</HintPath>
+      <HintPath>..\..\..\..\..\Games\Terraria\tshock_4.3.19_fresh\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
@@ -69,11 +69,11 @@
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
     <Reference Include="TerrariaServer">
-      <HintPath>..\..\..\Games\Terraria\tshock_4.3.19_fresh\TerrariaServer.exe</HintPath>
+      <HintPath>..\..\..\..\..\Games\Terraria\tshock_4.3.19_fresh\TerrariaServer.exe</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="TShockAPI">
-      <HintPath>..\..\..\Games\Terraria\tshock_4.3.19_fresh\ServerPlugins\TShockAPI.dll</HintPath>
+      <HintPath>..\..\..\..\..\Games\Terraria\tshock_4.3.19_fresh\ServerPlugins\TShockAPI.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

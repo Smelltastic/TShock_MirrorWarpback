@@ -55,6 +55,9 @@ namespace PlayerDB
 
         public void Connect(string Table, List<string> Fields)
         {
+            if( Connected )
+                throw new SystemException("Attempted to connect the database while already connected!");
+
             table = Table;
             fields = Fields;
 
@@ -96,7 +99,8 @@ namespace PlayerDB
 
             sqlcreator.EnsureTableStructure(new SqlTable(table, columns));
 
-            QueryResult result = db.QueryReader("SELECT * FROM " + table + ";");
+
+            //QueryResult result = db.QueryReader("SELECT * FROM " + table + ";");
 
             /* No longer read on init, instead read on access - because there's no place to store it without logged-in players
             string uuid = "";
@@ -149,13 +153,38 @@ namespace PlayerDB
             if (!fields.Contains(field))
                 throw new ArgumentException("Field not in database.", "field");
 
-            QueryResult result = db.QueryReader("SELECT " + field + " FROM " + table + " WHERE UserID=@0;", uuid);
-
-            if (result.Read())
+            if ( db is SqliteConnection )
             {
-                return result.Get<string>(field);
+                using (SqliteConnection dbl = (SqliteConnection)db)
+                {
+                    string ret;
+                    QueryResult result = dbl.QueryReader("SELECT " + field + " FROM " + table + " WHERE UserID=@0;", uuid);
+
+                    if (result.Read())
+                    {
+                        ret = result.Get<string>(field);
+                        return ret;
+                    }
+                    return defaultval;
+                }
+
             }
-            return defaultval;
+            else
+            {
+                QueryResult result = db.QueryReader("SELECT " + field + " FROM " + table + " WHERE UserID=@0;", uuid);
+                string ret;
+
+                if (result.Read())
+                {
+                    ret = result.Get<string>(field);
+                    db.Close();
+                    return ret;
+                }
+                db.Close();
+                return defaultval;
+            }
+
+
         }
 
         private void WriteUserData(string uuid, List<string> values)
@@ -165,8 +194,21 @@ namespace PlayerDB
 
             values.Insert(0, uuid);
 
-            db.Query("DELETE FROM " + table + " WHERE UserID=@0;", uuid);
-            db.Query("INSERT INTO " + table + " VALUES (@0," + paramlist1 + ");", values.ToArray());
+            if (db is SqliteConnection)
+            {
+                using (SqliteConnection dbl = (SqliteConnection)db)
+                {
+                    dbl.Query("DELETE FROM " + table + " WHERE UserID=@0;", uuid);
+                    dbl.Query("INSERT INTO " + table + " VALUES (@0," + paramlist1 + ");", values.ToArray());
+                }
+            }
+            else
+            {
+                db.Query("DELETE FROM " + table + " WHERE UserID=@0;", uuid);
+                db.Close();
+                db.Query("INSERT INTO " + table + " VALUES (@0," + paramlist1 + ");", values.ToArray());
+                db.Close();
+            }
         }
 
         private void WriteUserData(string uuid, string[] values)
@@ -234,12 +276,15 @@ namespace PlayerDB
                 return (string)p.GetData<string>(field);
             else
             {
-                string ret = ReadUserData(p.UUID, field, defaultval);
+                //string ret = ReadUserData(p.UUID, field, defaultval);
+                /* wait, why would this be here exactly?
                 if( ret != defaultval )
                 {
                     WriteUserData(p.UUID, field, ret);
                 }
-                return ret;
+                */
+                //return ret;
+                return ReadUserData(p.UUID, field, defaultval);
             }
         }
 
