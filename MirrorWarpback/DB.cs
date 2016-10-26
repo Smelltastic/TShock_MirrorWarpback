@@ -45,7 +45,8 @@ namespace PlayerDB
             if (!Connected)
                 return;
 
-            DelUserData(arg.User.UUID);
+            if( arg.User != null )
+                DelUserData(arg.User.UUID);
         }
 
         public void Connect(string Table, String[] Fields)
