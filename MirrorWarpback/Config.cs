@@ -10,6 +10,10 @@ namespace MirrorWarpback
         public bool returnItemConsume = false;
         public bool returnFromRecallPotion = true;
         public byte returnEffect = 1;
+        public bool restrictToSpawnArea = true;
+        public string spawnAreaRegion = "";
+        public int spawnMaxWarpbackDistanceX = 100;
+        public int spawnMaxWarpbackDistanceY = 50;
         public int[] resetItemTypes = { Terraria.ID.ItemID.CopperCoin, Terraria.ID.ItemID.SilverCoin, Terraria.ID.ItemID.GoldCoin, Terraria.ID.ItemID.PlatinumCoin };
         public int[] graveReturnItemTypes = { Terraria.ID.ItemID.WormholePotion };
         public bool graveReturnItemConsume = true;

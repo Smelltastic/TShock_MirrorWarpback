@@ -73,6 +73,15 @@ namespace MirrorWarpback
                 return ret;
             }
 
+            public static bool InSpawnRange( TSPlayer plr )
+            {
+                if (!config.restrictToSpawnArea)
+                    return true;
+                if (config.spawnAreaRegion == "" || config.spawnAreaRegion == null)
+                    return (Math.Abs(plr.TileX - plr.TPlayer.SpawnX) <= config.spawnMaxWarpbackDistanceX && Math.Abs(plr.TileY - plr.TPlayer.SpawnY) <= config.spawnMaxWarpbackDistanceY);
+                return (plr.CurrentRegion.Name.ToLower() == config.spawnAreaRegion.ToLower());
+            }
+
             public WarpbackState State
             {
                 get
@@ -81,21 +90,31 @@ namespace MirrorWarpback
                 }
             }
 
+            public bool Available
+            {
+                get
+                {
+                    //Plr.SendInfoMessage("Your position: " + Plr.TileX + "," + Plr.TileY + ". Your spawn position: " + Plr.TPlayer.SpawnX + "," + Plr.TPlayer.SpawnY);
+                    //Plr.SendInfoMessage("You are " + Math.Abs(Plr.TileX - Plr.TPlayer.SpawnX) + " X and " + Math.Abs(Plr.TileY - Plr.TPlayer.SpawnY) + " Y away from your spawn.");
+                    return (WarpbackState == WarpbackState.Available && InSpawnRange(Plr));
+                }
+            }
+
             public WarpbackData(TSPlayer plr)
             {
                 Plr = plr;
                 if (Plr.UUID != "")
                 {
-                    plr.SendInfoMessage("(Warpbackdata) Avail: " + db.GetUserData(plr, "Avail") + ", X/Y: " + db.GetUserData(plr, "X") + "," + db.GetUserData(plr, "Y") );
+                    //plr.SendInfoMessage("(Warpbackdata) Avail: " + db.GetUserData(plr, "Avail") + ", X/Y: " + db.GetUserData(plr, "X") + "," + db.GetUserData(plr, "Y") );
                     if (!Enum.TryParse<WarpbackState>(db.GetUserData(plr, "Avail"), out WarpbackState))
                     {
-                        plr.SendInfoMessage("(Warpbackdata) Avail parsing failed!");
+                        //plr.SendInfoMessage("(Warpbackdata) Avail parsing failed!");
                         WarpbackState = WarpbackState.None;
                     }
 
                     if( WarpbackState != WarpbackState.None )
                     {
-                        plr.SendInfoMessage("(Warpbackdata) Loading warpback data...");
+                        //plr.SendInfoMessage("(Warpbackdata) Loading warpback data...");
                         X = Convert.ToSingle(db.GetUserData(plr, "X"));
                         Y = Convert.ToSingle(db.GetUserData(plr, "Y"));
                     }
@@ -204,7 +223,7 @@ namespace MirrorWarpback
 
             WarpbackData wb = WarpbackData.Get(TShock.Players[args.Who]);
 
-            if( wb.State == WarpbackState.Available ) {
+            if( wb.Available ) {
                 bool haslens = !config.greetRequiresItem;
                 if (!haslens)
                 {
@@ -226,9 +245,11 @@ namespace MirrorWarpback
         private void OnPlayerSpawn(object sender, GetDataHandlers.SpawnEventArgs args)
         {
             WarpbackData wb = WarpbackData.Get(TShock.Players[args.Player]);
+            //TShock.Players[args.Player].SendInfoMessage("(OnPlayerSpawn) warpback: " + wb.State + ", spawn: " + TShock.Players[args.Player].TPlayer.SpawnX + "," + TShock.Players[args.Player].TPlayer.SpawnY + ", position: " + TShock.Players[args.Player].TileX + "," + TShock.Players[args.Player].TileY );
 
-            if( wb.State == WarpbackState.WaitingForSpawn )
+            if ( wb.State == WarpbackState.WaitingForSpawn )
             {
+                args.Handled = true;
                 wb.Spawned();
             }
         }
@@ -254,7 +275,7 @@ namespace MirrorWarpback
                 WarpbackData wb = WarpbackData.Get(TShock.Players[args.PlayerId]);
 
                 // If you use the return item while warpback is available...
-                if (wb.State == WarpbackState.Available && config.returnItemTypes.Contains(it.type) )
+                if (config.returnItemTypes.Contains(it.type) && wb.Available )
                 {
                     SendInfoMessageIfPresent(p, config.msgOnLensSuccess);
 
@@ -281,22 +302,30 @@ namespace MirrorWarpback
                     SendInfoMessageIfPresent(p, config.msgOnReset);
                 }
                 // If you use a mirror-type, so long as that type isn't your workback item while it is available...
-                else if (it.type == Terraria.ID.ItemID.MagicMirror || it.type == Terraria.ID.ItemID.CellPhone || it.type == Terraria.ID.ItemID.IceMirror || (config.returnFromRecallPotion && it.type == Terraria.ID.ItemID.RecallPotion))
+                else if ( it.type == Terraria.ID.ItemID.MagicMirror || it.type == Terraria.ID.ItemID.CellPhone || it.type == Terraria.ID.ItemID.IceMirror || (config.returnFromRecallPotion && it.type == Terraria.ID.ItemID.RecallPotion) )
                 {
-                    bool haslens = false;
+                    if (!WarpbackData.InSpawnRange(p)) {
 
-                    foreach (NetItem thing in p.TPlayer.inventory)
-                    {
-                        if (config.returnItemTypes.Contains(thing.NetId))
-                            haslens = true;
+                        if (config.msgOnMirrorWithLens != config.msgOnMirrorNoLens)
+                        {
+                            bool haslens = false;
+
+                            foreach (NetItem thing in p.TPlayer.inventory)
+                            {
+                                if (config.returnItemTypes.Contains(thing.NetId))
+                                    haslens = true;
+                            }
+
+                            if (haslens)
+                                SendInfoMessageIfPresent(p, config.msgOnMirrorWithLens);
+                            else
+                                SendInfoMessageIfPresent(p, config.msgOnMirrorNoLens);
+                        }
+                        else
+                            SendInfoMessageIfPresent(p, config.msgOnMirrorWithLens);
+
+                        wb.Set(p.X, p.Y);
                     }
-
-                    if (haslens)
-                        SendInfoMessageIfPresent(p, config.msgOnMirrorWithLens);
-                    else
-                        SendInfoMessageIfPresent(p, config.msgOnMirrorNoLens);
-
-                    wb.Set(p.X, p.Y);
                 }
                 // If you use a return item, but the above conditions were not met...
                 else if( config.returnItemTypes.Contains(it.type) )
