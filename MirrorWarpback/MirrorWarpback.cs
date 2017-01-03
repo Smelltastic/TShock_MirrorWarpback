@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+//using System.Text;
+//using System.Threading.Tasks;
 using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
 
 namespace MirrorWarpback
 {
-    [ApiVersion(1, 25)]
+    [ApiVersion(2, 0)]
     public class MirrorWarpback : TerrariaPlugin
     {
         public static Config config = Config.Read("mirrorwarpback.json");
@@ -18,7 +18,7 @@ namespace MirrorWarpback
         {
             get
             {
-                return new Version("1.1");
+                return new Version("1.2");
             }
         }
 
@@ -73,12 +73,37 @@ namespace MirrorWarpback
                 return ret;
             }
 
+            private static int RealSpawnX( TSPlayer plr )
+            {
+                if( plr.TPlayer.SpawnX == -1 )
+                {
+                    return Main.spawnTileX;
+                }
+                return plr.TPlayer.SpawnX;
+            }
+
+            private static int RealSpawnY(TSPlayer plr)
+            {
+                if (plr.TPlayer.SpawnY == -1)
+                {
+                    return Main.spawnTileY;
+                }
+                return plr.TPlayer.SpawnY;
+            }
+
             public static bool InSpawnRange( TSPlayer plr )
             {
                 if (!config.restrictToSpawnArea)
+                {
+                    plr.SendInfoMessage("Warpback not restricted to spawn area, skipping check.");
                     return true;
+                }
                 if (config.spawnAreaRegion == "" || config.spawnAreaRegion == null)
-                    return (Math.Abs(plr.TileX - plr.TPlayer.SpawnX) <= config.spawnMaxWarpbackDistanceX && Math.Abs(plr.TileY - plr.TPlayer.SpawnY) <= config.spawnMaxWarpbackDistanceY);
+                {
+                    plr.SendInfoMessage("Checking InSpawnRange based on distance. Your pos: " + plr.TileX + "," + plr.TileY + ". Your spawn: " + RealSpawnX(plr) + "," + RealSpawnY(plr) + ". Max distance: " + config.spawnMaxWarpbackDistanceX + "," + config.spawnMaxWarpbackDistanceY);
+                    return (Math.Abs(plr.TileX - RealSpawnX(plr) ) <= config.spawnMaxWarpbackDistanceX && Math.Abs(plr.TileY - RealSpawnY(plr) ) <= config.spawnMaxWarpbackDistanceY);
+                }
+                plr.SendInfoMessage("Checking InSpawnRange based on region - are you in region '" + config.spawnAreaRegion + "'?");
                 return (plr.CurrentRegion.Name.ToLower() == config.spawnAreaRegion.ToLower());
             }
 
