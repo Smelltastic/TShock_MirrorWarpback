@@ -95,15 +95,15 @@ namespace MirrorWarpback
             {
                 if (!config.restrictToSpawnArea)
                 {
-                    plr.SendInfoMessage("Warpback not restricted to spawn area, skipping check.");
+                    //plr.SendInfoMessage("Warpback not restricted to spawn area, skipping check.");
                     return true;
                 }
                 if (config.spawnAreaRegion == "" || config.spawnAreaRegion == null)
                 {
-                    plr.SendInfoMessage("Checking InSpawnRange based on distance. Your pos: " + plr.TileX + "," + plr.TileY + ". Your spawn: " + RealSpawnX(plr) + "," + RealSpawnY(plr) + ". Max distance: " + config.spawnMaxWarpbackDistanceX + "," + config.spawnMaxWarpbackDistanceY);
+                    //plr.SendInfoMessage("Checking InSpawnRange based on distance. Your pos: " + plr.TileX + "," + plr.TileY + ". Your spawn: " + RealSpawnX(plr) + "," + RealSpawnY(plr) + ". Max distance: " + config.spawnMaxWarpbackDistanceX + "," + config.spawnMaxWarpbackDistanceY);
                     return (Math.Abs(plr.TileX - RealSpawnX(plr) ) <= config.spawnMaxWarpbackDistanceX && Math.Abs(plr.TileY - RealSpawnY(plr) ) <= config.spawnMaxWarpbackDistanceY);
                 }
-                plr.SendInfoMessage("Checking InSpawnRange based on region - are you in region '" + config.spawnAreaRegion + "'?");
+                //plr.SendInfoMessage("Checking InSpawnRange based on region - are you in region '" + config.spawnAreaRegion + "'?");
                 return (plr.CurrentRegion.Name.ToLower() == config.spawnAreaRegion.ToLower());
             }
 
@@ -326,7 +326,7 @@ namespace MirrorWarpback
                     wb.Clear();
                     SendInfoMessageIfPresent(p, config.msgOnReset);
                 }
-                // If you use a mirror-type, so long as that type isn't your workback item while it is available...
+                // If you use a mirror-type, so long as that type isn't your warpback item while it is available...
                 else if ( it.type == Terraria.ID.ItemID.MagicMirror || it.type == Terraria.ID.ItemID.CellPhone || it.type == Terraria.ID.ItemID.IceMirror || (config.returnFromRecallPotion && it.type == Terraria.ID.ItemID.RecallPotion) )
                 {
                     if (!WarpbackData.InSpawnRange(p)) {
