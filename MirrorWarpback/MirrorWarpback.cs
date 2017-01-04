@@ -18,7 +18,7 @@ namespace MirrorWarpback
         {
             get
             {
-                return new Version("1.2");
+                return new Version("1.3");
             }
         }
 
